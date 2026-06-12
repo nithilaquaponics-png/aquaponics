@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Aquaponics — Remote Core</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+:root{
+  --bg:#060b0f;--surf:#0b1318;--card-f:#0a141e;--card-p:#09140c;
+  --bdr:#18262e;--fa:#00c8ff;--pa:#39e07a;--yellow:#ffc840;--red:#ff3b4a;--txt:#ccdde8;--dim:#4e6878;
+  --mono:'Share Tech Mono',monospace;--display:'Orbitron',sans-serif;--body:'Exo 2',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--body);font-size:13px;padding:0 16px}
+.shell{max-width:1520px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh}
+header{padding:14px 0;border-bottom:1px solid var(--bdr);display:flex;justify-content:space-between;align-items:center}
+.brand h1{font-family:var(--display);font-size:16px;background:linear-gradient(90deg,var(--fa) 0%,var(--pa) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.brand p{font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:.14em}
+.sys-status{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid var(--bdr);background:rgba(0,0,0,0.4)}
+.status-online{color:var(--pa);border-color:rgba(57,224,122,0.3)}
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 0;}
+.panel{display:flex;flex-direction:column;gap:10px}
+.ph-title{font-family:var(--display);font-size:12px;font-weight:600}
+.fp .ph-title{color:var(--fa)}.pp .ph-title{color:var(--pa)}
+.badge{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:12px;border:1px solid var(--bdr);margin-left:8px}
+.card{border-radius:10px;border:1px solid var(--bdr);overflow:hidden;background:var(--surf)}
+.cb{padding:13px}
+.vw{position:relative;width:100%;aspect-ratio:4/3;background:#020609;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.vw img{width:100%;height:100%;object-fit:cover;display:block}
+.vtotal{position:absolute;top:10px;right:12px;z-index:10;font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,0.6);border:1px solid var(--bdr)}
+.chips{display:flex;gap:8px}
+.chip{flex:1;border-radius:7px;padding:10px 12px;border:1px solid var(--bdr);background:rgba(0,0,0,0.2)}
+.chip-lbl{font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase}
+.chip-val{font-family:var(--mono);font-size:28px;font-weight:600}
+.fp .chip-val{color:var(--fa)}.pp .chip-val{color:var(--pa)}
+.sensors{display:flex;flex-direction:column;gap:12px}
+.sensor{display:grid;grid-template-columns:1fr auto}
+.sn{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.sv{font-family:var(--mono);font-size:18px;color:var(--txt)}
+.wlw{padding:10px 13px;border-radius:7px;border:1px solid var(--bdr);background:rgba(0,0,0,0.3);margin-top:12px;font-family:var(--mono);font-weight:bold;text-align:center}
+.bottom-container{padding:5px 0 20px 0}
+.turbidity-layout{display:flex;align-items:center;justify-content:space-between;padding:15px}
+.turb-title{font-family:var(--display);font-size:13px;color:#00e5ff}
+.turb-numeric{font-family:var(--mono);font-size:32px;color:#00e5ff}
+.turb-status-box{font-family:var(--mono);font-size:11px;padding:6px 14px;border-radius:6px;border:1px solid #1b3a4b;color:#00e5ff;font-weight:bold}
+.actuator-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:13px}
+.act-chip{border-radius:7px;padding:8px 10px;border:1px solid var(--bdr);background:rgba(0,0,0,0.25);text-align:center}
+.act-lbl{font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+.act-val{font-family:var(--mono);font-size:13px;font-weight:600}
+.act-on{color:#39e07a}.act-off{color:#4e6878}
+.img-error-msg {position:absolute;color:var(--dim);font-family:var(--mono);font-size:11px;text-align:center;padding:10px}
+@media(max-width:860px){h1{font-size:14px}.dual{grid-template-columns:1fr}.actuator-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header>
+  <div class="brand"><h1>IoT Smart Aquaponics</h1><p>GLOBAL PUBLIC DASHBOARD</p></div>
+  <div class="sys-status status-online" id="net-status">CLOUD CONNECTED</div>
+</header>
+<div class="dual">
+  <div class="panel fp">
+    <div class="ph-title">Fish Tank <span class="badge" id="fish-frame">FRAME 00000</span></div>
+    <div class="card">
+      <div class="vw">
+        <div class="img-error-msg" id="fish-msg">Waiting for pipeline frame stream...</div>
+        <img id="fish-img" src="" alt="" style="display:none;">
+        <div class="vtotal" id="f-total">0 fish</div>
+      </div>
+    </div>
+    <div class="card"><div class="cb"><div class="chips">
+        <div class="chip"><div class="chip-lbl">Healthy</div><div class="chip-val" id="fv-h">0</div></div>
+        <div class="chip"><div class="chip-lbl">Unhealthy</div><div class="chip-val" id="fv-u">0</div></div>
+        <div class="chip"><div class="chip-lbl">Dead</div><div class="chip-val" id="fv-d">0</div></div>
+    </div></div></div>
+    <div class="card"><div class="cb">
+        <div class="sensors">
+          <div class="sensor"><span class="sn">Temperature</span><span class="sv" id="f-temp">--°C</span></div>
+          <div class="sensor"><span class="sn">pH Level</span><span class="sv" id="f-ph">--</span></div>
+        </div>
+        <div class="wlw" id="f-wls">WATER LEVEL: LOADING...</div>
+    </div></div>
+  </div>
+
+  <div class="panel pp">
+    <div class="ph-title">Chilli Ecosystem <span class="badge" id="plant-frame">FRAME 00000</span></div>
+    <div class="card">
+      <div class="vw">
+        <div class="img-error-msg" id="plant-msg">Waiting for pipeline frame stream...</div>
+        <img id="plant-img" src="" alt="" style="display:none;">
+        <div class="vtotal" id="p-total">0 leaves</div>
+      </div>
+    </div>
+    <div class="card"><div class="cb"><div class="chips">
+        <div class="chip"><div class="chip-lbl">Healthy</div><div class="chip-val" id="pv-h">0</div></div>
+        <div class="chip"><div class="chip-lbl">Curl Virus</div><div class="chip-val" id="pv-c">0</div></div>
+        <div class="chip"><div class="chip-lbl">Cercospora</div><div class="chip-val" id="pv-ce">0</div></div>
+    </div></div></div>
+    <div class="card"><div class="cb">
+        <div class="sensors">
+          <div class="sensor"><span class="sn">Temperature</span><span class="sv" id="p-temp">--°C</span></div>
+          <div class="sensor"><span class="sn">Humidity</span><span class="sv" id="p-hum">--%</span></div>
+        </div>
+        <div class="wlw" id="p-wls">WATER LEVEL: LOADING...</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="bottom-container">
+  <div class="dual" style="padding-top:0">
+    <div class="card">
+      <div class="turbidity-layout">
+        <div class="turb-title">System Diagnostics</div>
+        <div class="turb-numeric" id="sys-turb">0.0</div>
+        <div class="turb-status-box" id="sys-turb-status">CLEAN</div>
+      </div>
+    </div>
+    <div class="card"><div class="actuator-grid">
+        <div class="act-chip"><div class="act-lbl">PUMP 1</div><div class="act-val act-off" id="act-pump1">OFF</div></div>
+        <div class="act-chip"><div class="act-lbl">PUMP 2</div><div class="act-val act-off" id="act-pump2">OFF</div></div>
+        <div class="act-chip"><div class="act-lbl">PUMP 3</div><div class="act-val act-off" id="act-pump3">OFF</div></div>
+        <div class="act-chip"><div class="act-lbl">PUMP 4</div><div class="act-val act-off" id="act-pump4">OFF</div></div>
+        <div class="act-chip"><div class="act-lbl">PUMP 5</div><div class="act-val act-off" id="act-pump5">OFF</div></div>
+        <div class="act-chip"><div class="act-lbl">FEEDER</div><div class="act-val act-off" id="act-feeder">OFF</div></div>
+    </div></div>
+  </div>
+</div>
+</div>
+
+<script>
+// Firebase Project Database Configuration Keys
+const firebaseConfig = {
+  databaseURL: "https://aquirium-montoring-default-rtdb.asia-southeast1.firebasedatabase.app/"
+};
+
+// Initialize Firebase App Instance
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+function setActuatorState(domId, val) {
+  const el = document.getElementById(domId);
+  if (!el) return;
+  const isOn = (val === "ON" || val === true || val === "TRUE" || val === 1);
+  el.textContent = isOn ? "ON" : "OFF";
+  el.className = "act-val " + (isOn ? "act-on" : "act-off");
+}
+
+// ── 🐟 LIVE STREAM & TELEMETRY LISTENER FOR FISH TANK ──────────
+database.ref("/aquarium").on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (!data) return;
+
+  // Process Sensor Readings Safely
+  if(data.temperature !== undefined) document.getElementById("f-temp").textContent = data.temperature + "°C";
+  if(data.ph !== undefined) document.getElementById("f-ph").textContent = data.ph;
+  
+  let wl = data.waterLevel || data.water_level || "0";
+  let wlStatus = (typeof wl === 'string' && wl.toUpperCase() === "REACHED") ? "REACHED" : "NOT REACHED";
+  document.getElementById("f-wls").textContent = "WATER LEVEL: " + wlStatus;
+
+  // Process Object Detection Metrics
+  if (data.inference) {
+    const inf = data.inference;
+    const idx = inf.frame_idx || 0;
+    document.getElementById("fish-frame").textContent = "FRAME " + String(idx).padStart(5, "0");
+    
+    const counts = inf.counts || {};
+    const total = inf.total_in_frame || 0;
+    document.getElementById("f-total").textContent = total + " fish";
+    document.getElementById("fv-h").textContent = counts["healthy fish"] || 0;
+    document.getElementById("fv-u").textContent = counts["unhealthy fish"] || 0;
+    document.getElementById("fv-d").textContent = counts["dead fish"] || 0;
+
+    // Direct String Image Renderer (Base64 Stream Mapping)
+    if (inf.live_frame_base64) {
+      const imgEl = document.getElementById("fish-img");
+      const msgEl = document.getElementById("fish-msg");
+      imgEl.src = "data:image/jpeg;base64," + inf.live_frame_base64;
+      imgEl.style.display = "block";
+      msgEl.style.display = "none";
+    }
+  }
+}, () => {
+  document.getElementById("net-status").textContent = "CONNECTION ERROR";
+  document.getElementById("net-status").style.color = "var(--red)";
+});
+
+// ── 🌶️ LIVE STREAM & TELEMETRY LISTENER FOR CROP ECOSYSTEM ─────
+database.ref("/growbed").on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (!data) return;
+
+  if(data.temperature !== undefined) document.getElementById("p-temp").textContent = data.temperature + "°C";
+  if(data.humidity !== undefined) document.getElementById("p-hum").textContent = data.humidity + "%";
+  
+  let soil = data.waterLevel || data.water_level || "0";
+  let wlStatus = (typeof soil === 'string' && soil.toUpperCase() === "REACHED") ? "REACHED" : "NOT REACHED";
+  document.getElementById("p-wls").textContent = "WATER LEVEL: " + wlStatus;
+
+  if (data.inference) {
+    const inf = data.inference;
+    const idx = inf.frame_idx || 0;
+    document.getElementById("plant-frame").textContent = "FRAME " + String(idx).padStart(5, "0");
+    
+    const counts = inf.counts || {};
+    const total = inf.total_in_frame || 0;
+    document.getElementById("p-total").textContent = total + " leaves";
+    document.getElementById("pv-h").textContent = counts["Healthy_Leaf"] || 0;
+    document.getElementById("pv-c").textContent = counts["Curl_Virus"] || 0;
+    document.getElementById("pv-ce").textContent = counts["Cercospora_Leaf_Spot"] || 0;
+
+    if (inf.live_frame_base64) {
+      const imgEl = document.getElementById("plant-img");
+      const msgEl = document.getElementById("plant-msg");
+      imgEl.src = "data:image/jpeg;base64," + inf.live_frame_base64;
+      imgEl.style.display = "block";
+      msgEl.style.display = "none";
+    }
+  }
+});
+
+// ── ⚙️ GLOBAL DIAGNOSTICS STREAM LISTENER ───────────────────────
+database.ref("/status").on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (!data) return;
+  
+  const rawTurb = parseFloat(data.turbidity || 1150);
+  document.getElementById("sys-turb").textContent = rawTurb.toFixed(1) + " (ADC)";
+  
+  const statusBox = document.getElementById("sys-turb-status");
+  const isDirty = rawTurb > 1150; // Aligns with your script configuration limits
+  statusBox.textContent = isDirty ? "DIRTY" : "CLEAN";
+  statusBox.style.borderColor = isDirty ? "var(--red)" : "#1b3a4b";
+  statusBox.style.color = isDirty ? "var(--red)" : "#00e5ff";
+});
+
+// ── ⚡ HARDWARE RELAY SWITCH STATES LISTENER ───────────────────
+database.ref("/control").on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (!data) return;
+  setActuatorState("act-pump1", data.pump1);
+  setActuatorState("act-pump2", data.pump2);
+  setActuatorState("act-pump3", data.pump3);
+  setActuatorState("act-pump4", data.pump4);
+  setActuatorState("act-pump5", data.pump5);
+  setActuatorState("act-feeder", data.feeder);
+});
+</script>
+</body>
+</html>
